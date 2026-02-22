@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SJS POS Vercel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); }
+        body { background-color: #0f172a; color: white; -webkit-tap-highlight-color: transparent; }
+    </style>
+</head>
+<body>
+    <div id="app" class="p-4 max-w-md mx-auto min-h-screen">
+        <div id="login-screen" class="flex flex-col items-center justify-center min-h-[80vh]">
+            <h1 class="text-4xl font-black mb-8 text-indigo-500 italic">SJS POS</h1>
+            <div class="glass p-6 rounded-3xl w-full text-center">
+                <input type="password" id="pin-display" readonly placeholder="PIN" class="bg-slate-800 text-center text-3xl w-full py-4 rounded-2xl mb-6 border border-indigo-500/30 tracking-widest text-white">
+                <div class="grid grid-cols-3 gap-3" id="keypad">
+                    <script>
+                        for(let i=1; i<=9; i++) document.write(`<button onclick="press('${i}')" class="glass py-4 rounded-xl text-2xl active:bg-indigo-600">${i}</button>`);
+                    </script>
+                    <button onclick="resetPin()" class="glass py-4 rounded-xl text-red-400">C</button>
+                    <button onclick="press('0')" class="glass py-4 rounded-xl text-2xl active:bg-indigo-600">0</button>
+                    <button onclick="login()" class="bg-indigo-600 py-4 rounded-xl font-bold">OK</button>
+                </div>
+            </div>
+        </div>
+        <div id="main-panel" class="hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="role-tag" class="text-indigo-400 font-bold uppercase tracking-widest text-sm">---</h2>
+                <button onclick="location.reload()" class="bg-slate-800 px-3 py-1 rounded-full text-[10px] text-slate-400">Chiqish</button>
+            </div>
+            <div id="tables-grid" class="grid grid-cols-3 gap-3"></div>
+        </div>
+    </div>
+    <script>
+        const tg = window.Telegram.WebApp;
+        let pin = "";
+        let state = { tables: Array.from({length:12}, (_, i) => ({id: i+1, status: 'free'})) };
+        function press(n) { if(pin.length < 4) { pin += n; document.getElementById('pin-display').value = pin; } }
+        function resetPin() { pin = ""; document.getElementById('pin-display').value = ""; }
+        function login() {
+            const roles = {"1111":"ADMIN", "2222":"KASSIR", "3333":"OFITSIANT"};
+            if(roles[pin]) {
+                document.getElementById('role-tag').innerText = roles[pin];
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('main-panel').classList.remove('hidden');
+                loadData();
+            } else { alert("PIN xato!"); resetPin(); }
+        }
+        function loadData() {
+            try {
+                tg.CloudStorage.getItem('pos_v2', (err, val) => {
+                    if(!err && val) { state = JSON.parse(val); }
+                    render();
+                });
+            } catch(e) { render(); }
+        }
+        function toggleTable(id) {
+            let t = state.tables.find(x => x.id === id);
+            t.status = t.status === 'free' ? 'occupied' : 'free';
+            render();
+            try { tg.CloudStorage.setItem('pos_v2', JSON.stringify(state)); } catch(e) {}
+        }
+        function render() {
+            const grid = document.getElementById('tables-grid');
+            grid.innerHTML = state.tables.map(t => `
+                <button onclick="toggleTable(${t.id})" class="aspect-square rounded-2xl border-2 flex flex-col items-center justify-center transition-all ${t.status==='occupied' ? 'bg-amber-500 border-amber-600 shadow-lg' : 'glass border-slate-700 text-slate-500'}">
+                    <span class="text-[9px] uppercase opacity-60">${t.id}-Stol</span>
+                    <span class="font-bold text-sm">${t.status==='occupied' ? 'BAND' : 'BO\'SH'}</span>
+                </button>
+            `).join('');
+        }
+        tg.expand();
+        setInterval(loadData, 10000);
+    </script>
+</body>
+</html>
